@@ -1,24 +1,39 @@
-use haphazard::{AtomicPtr, Domain, HazardPointer};
+use clap::Parser;
+use execute::Execute;
+use haphazard::{AtomicPtr, HazardPointer};
+use std::fs;
 use std::fs::DirEntry;
 use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::{env, f64::consts::E, fs};
-use voca_rs::Voca;
+// use voca_rs::Voca;
 
-use execute::Execute;
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Source Folder directory without the / at the end
+    #[arg(short, long)]
+    input: String,
+    /// Destination Folder directory without the / at the end
+    #[arg(short, long)]
+    output: String,
+    /// Jpeg XL static exec folder directory with include the cjxl.exe at the end
+    #[arg(short, long)]
+    jpegxl_path: String,
+    /// Number of concurrent exec to run (1 for 1 thread or 4 for 4 thread)
+    #[arg(short, long, default_value_t = 4)]
+    concurrent: i32,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let sourcefolder = args[1].parse::<String>().expect("cannot convert first env");
-    let destinationfolder = args[2]
-        .parse::<String>()
-        .expect("cannot convert second env");
-    let concurrent_amount = args[3].parse::<i32>().expect("cannot convert third env");
-    let jpegxl_path = args[4].parse::<String>().expect("cannot convert fifth env");
+    let args = Args::parse();
+    let sourcefolder = args.input;
+    let destinationfolder = args.output;
+    let concurrent_amount = args.concurrent;
+    let jpegxl_path = args.jpegxl_path;
     fs::create_dir_all(destinationfolder.clone()).expect("cannot create dir");
-    let currentusageArc = Arc::new(AtomicPtr::from(Box::new(0)));
+    let currentusage_arc = Arc::new(AtomicPtr::from(Box::new(0)));
 
     let destinationfolder_arc = Arc::new(destinationfolder.clone());
     let jpegxl_path_arc = Arc::new(jpegxl_path.clone());
@@ -28,8 +43,8 @@ fn main() {
                 Ok(direntry1) => {
                     let direntry_arc = Arc::new(direntry1);
                     let direntry = Arc::clone(&direntry_arc);
-                    let currentusage = Arc::clone(&currentusageArc);
-                    let currentusage1 = Arc::clone(&currentusageArc);
+                    let currentusage = Arc::clone(&currentusage_arc);
+                    let currentusage1 = Arc::clone(&currentusage_arc);
                     let mut h = HazardPointer::new();
                     if currentusage.safe_load(&mut h).expect("not null") < &concurrent_amount {
                         fs::create_dir_all(

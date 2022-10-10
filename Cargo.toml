@@ -10,3 +10,4 @@ voca_rs = "1.14.0"
 # jpegxl-rs = { version = "0.6.1" , features = ['vendored']}
 execute = "0.2.11"
 haphazard = "0.1.4"
+clap = { version = "4.0.12", features = ["derive"] }
