@@ -1,7 +1,9 @@
+use haphazard::{AtomicPtr, Domain, HazardPointer};
 use std::fs::DirEntry;
 use std::process::Command;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use std::{env, f64::consts::E, fs};
 use voca_rs::Voca;
 
@@ -16,7 +18,8 @@ fn main() {
     let concurrent_amount = args[3].parse::<i32>().expect("cannot convert third env");
     let jpegxl_path = args[4].parse::<String>().expect("cannot convert fifth env");
     fs::create_dir_all(destinationfolder.clone()).expect("cannot create dir");
-    let mut currentusage = 0;
+    let currentusageArc = Arc::new(AtomicPtr::from(Box::new(0)));
+
     let destinationfolder_arc = Arc::new(destinationfolder.clone());
     let jpegxl_path_arc = Arc::new(jpegxl_path.clone());
     for mut currentdir in fs::read_dir(sourcefolder) {
@@ -25,7 +28,10 @@ fn main() {
                 Ok(direntry1) => {
                     let direntry_arc = Arc::new(direntry1);
                     let direntry = Arc::clone(&direntry_arc);
-                    if currentusage < concurrent_amount {
+                    let currentusage = Arc::clone(&currentusageArc);
+                    let currentusage1 = Arc::clone(&currentusageArc);
+                    let mut h = HazardPointer::new();
+                    if currentusage.safe_load(&mut h).expect("not null") < &concurrent_amount {
                         fs::create_dir_all(
                             destinationfolder.clone()
                                 + "/"
@@ -34,10 +40,22 @@ fn main() {
                         .expect("cannot create dir");
                         let destinationfolder_clone = Arc::clone(&destinationfolder_arc);
                         let jpegxl_path_clone = Arc::clone(&jpegxl_path_arc);
+
                         thread::spawn(move || {
                             run_task(direntry, destinationfolder_clone, jpegxl_path_clone);
+                            let mut h1 = HazardPointer::new();
+                            let my_x = currentusage1.safe_load(&mut h1).expect("not null");
+                            currentusage1.store(Box::new(my_x - 1));
                         });
-                        currentusage += 1;
+                        let my_x2 = currentusage.safe_load(&mut h).expect("not null");
+                        currentusage.store(Box::new(my_x2 + 1));
+                    } else {
+                        let mut h2 = HazardPointer::new();
+                        while currentusage.safe_load(&mut h2).expect("not null")
+                            == &concurrent_amount
+                        {
+                            thread::sleep(Duration::from_secs(5))
+                        }
                     }
                     // println!("{:?}", direntry.path());
                 }
